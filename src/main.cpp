@@ -11,13 +11,18 @@
  */
 
 #include <Arduino.h>
+#include <LittleFS.h>
 #include "vm_board_config.h"
 #include "vm_uart_protocol.h"
 #include "vm_uart_link.h"
 #include "vm_esp32_controller.h"
+#include "vm_database.h"
+#include "vm_web_server.h"
 
 VmUartLink uartLink;
 VmEsp32Controller controller;
+VmDatabase vendingDB;
+VmWebServer webServer(&vendingDB);
 
 // ------------------------------------------------------------
 // Callbacks temporales de diagnóstico (solo imprimen por Serial USB).
@@ -58,8 +63,26 @@ void onStatusUpdate(uint8_t door, uint8_t barrier, uint8_t mode, uint32_t curren
 }
 
 void setup() {
-    Serial.begin(115200); // Puerto USB de diagnóstico, no confundir con el UART hacia el Mega.
+    Serial.begin(115200); // Puerto USB de diagnóstico
+    delay(1000);
+    
+    Serial.println("\n--- INICIANDO VENDING MACHINE SAID ---");
 
+    // 1. Inicializar Sistema de Archivos
+    if (!LittleFS.begin(true)) {
+        Serial.println("Error montando LittleFS");
+        return;
+    }
+    Serial.println("[FS] LittleFS montado correctamente.");
+
+    // 2. Inicializar Base de Datos (SQLite)
+    vendingDB.begin();
+
+    // 3. Inicializar Servidor Web y SoftAP
+    webServer.begin();
+
+    // 4. Inicializar UART hacia el Mega
+    Serial.println("[UART] Inicializando enlace con el Mega...");
     Serial2.begin(VM_UART_BAUDRATE, SERIAL_8N1, VM_UART_RX_PIN, VM_UART_TX_PIN);
     uartLink.begin(Serial2);
 
@@ -74,8 +97,4 @@ void setup() {
 
 void loop() {
     uartLink.poll();
-
-    // TODO: aquí se conectará la máquina de estados de negocio,
-    // el servidor HTTP, la lectura de RFID y la integración con
-    // SQLite, una vez que se aborden esas capas.
 }
