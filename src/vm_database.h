@@ -149,6 +149,37 @@ public:
     /** Retorna los slots en JSON para el endpoint /api/slots. */
     String getSlotsJson();
 
+    // ---- Gestión de Tarjetas (API Web) ------------------------------------
+
+    /** Listar todas las tarjetas sin importar la habilitación (JSON) */
+    String getAllCardsJson();
+
+    /** Listar todas las tarjetas activas o inactivas según el parámetro (JSON) */
+    String getCardsByStateJson(bool habilitada);
+
+    /** Consulta de una tarjeta por ID (JSON) */
+    String getCardByIdJson(uint32_t id);
+
+    /** Registro de una nueva tarjeta */
+    bool registerCard(const char* uid, uint32_t saldoCentavos, uint32_t reservaCentavos, bool habilitada);
+
+    /** Modificar la habilitación de una tarjeta */
+    bool setCardEnablement(uint32_t id, bool habilitada);
+
+    /** Modificar el saldo de una tarjeta */
+    bool updateCardBalance(uint32_t id, uint32_t saldoCentavos);
+
+    // ---- Informes y Productos (API Web) -----------------------------------
+
+    /** Obtener historial de ventas paginado en JSON */
+    String getTransactionsJson(int page, int limit);
+
+    /** Agregar un nuevo producto al catálogo general */
+    bool addProduct(const char* nombre, uint32_t costoCentavos);
+
+    /** Activar o desactivar un producto del catálogo (No se borran por historial) */
+    bool setProductActive(uint32_t productId, bool activo);
+
 private:
     sqlite3*          _db;
     SemaphoreHandle_t _mutex;

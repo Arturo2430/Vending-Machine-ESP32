@@ -455,3 +455,167 @@ String VmDatabase::getSlotsJson() {
     serializeJson(doc, out);
     return out;
 }
+// ---- Gestión de Tarjetas (API Web) ------------------------------------
+
+String VmDatabase::getAllCardsJson() {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    const char* sql = "SELECT id_tarjeta, uid, habilitada FROM tarjetas_demo;";
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            JsonObject obj = arr.add<JsonObject>();
+            obj["id"] = sqlite3_column_int(stmt, 0);
+            obj["uid"] = (const char*)sqlite3_column_text(stmt, 1);
+            obj["habilitada"] = sqlite3_column_int(stmt, 2) == 1;
+        }
+        sqlite3_finalize(stmt);
+    }
+    xSemaphoreGive(_mutex);
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+String VmDatabase::getCardsByStateJson(bool habilitada) {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    const char* sql = "SELECT id_tarjeta, uid FROM tarjetas_demo WHERE habilitada = ?;";
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, habilitada ? 1 : 0);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            JsonObject obj = arr.add<JsonObject>();
+            obj["id"] = sqlite3_column_int(stmt, 0);
+            obj["uid"] = (const char*)sqlite3_column_text(stmt, 1);
+        }
+        sqlite3_finalize(stmt);
+    }
+    xSemaphoreGive(_mutex);
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+String VmDatabase::getCardByIdJson(uint32_t id) {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    const char* sql = "SELECT uid, saldo_centavos, reserva_centavos, habilitada FROM tarjetas_demo WHERE id_tarjeta = ?;";
+    JsonDocument doc;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, id);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            doc["uid"] = (const char*)sqlite3_column_text(stmt, 0);
+            doc["saldo"] = sqlite3_column_int(stmt, 1);
+            doc["reserva"] = sqlite3_column_int(stmt, 2);
+            doc["habilitada"] = sqlite3_column_int(stmt, 3) == 1;
+        }
+        sqlite3_finalize(stmt);
+    }
+    xSemaphoreGive(_mutex);
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+bool VmDatabase::registerCard(const char* uid, uint32_t saldoCentavos, uint32_t reservaCentavos, bool habilitada) {
+    char sql[128];
+    snprintf(sql, sizeof(sql),
+        "INSERT INTO tarjetas_demo (uid, saldo_centavos, reserva_centavos, habilitada) "
+        "VALUES ('%s', %lu, %lu, %d);",
+        uid, (unsigned long)saldoCentavos, (unsigned long)reservaCentavos, habilitada ? 1 : 0);
+    return execSql(sql);
+}
+
+bool VmDatabase::setCardEnablement(uint32_t id, bool habilitada) {
+    char sql[128];
+    snprintf(sql, sizeof(sql),
+        "UPDATE tarjetas_demo SET habilitada = %d WHERE id_tarjeta = %u;",
+        habilitada ? 1 : 0, id);
+    return execSql(sql);
+}
+
+bool VmDatabase::updateCardBalance(uint32_t id, uint32_t saldoCentavos) {
+    char sql[128];
+    snprintf(sql, sizeof(sql),
+        "UPDATE tarjetas_demo SET saldo_centavos = %lu WHERE id_tarjeta = %u;",
+        (unsigned long)saldoCentavos, id);
+    return execSql(sql);
+}
+
+// ---- Informes y Productos (API Web) -----------------------------------
+
+String VmDatabase::getTransactionsJson(int page, int limit) {
+    if (page < 1) page = 1;
+    if (limit < 1) limit = 10;
+    int offset = (page - 1) * limit;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    
+    // Primero obtener el total de registros para la paginación
+    int totalRegistros = 0;
+    const char* countSql = "SELECT COUNT(*) FROM transacciones;";
+    sqlite3_stmt* countStmt = nullptr;
+    if (sqlite3_prepare_v2(_db, countSql, -1, &countStmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(countStmt) == SQLITE_ROW) {
+            totalRegistros = sqlite3_column_int(countStmt, 0);
+        }
+        sqlite3_finalize(countStmt);
+    }
+    
+    int totalPages = (totalRegistros + limit - 1) / limit;
+
+    // Obtener los datos paginados
+    const char* sql = "SELECT id_transaccion, slot, producto, metodo, precio_historico, estado, secuencia "
+                      "FROM transacciones ORDER BY id_transaccion DESC LIMIT ? OFFSET ?;";
+                      
+    JsonDocument doc;
+    doc["page"] = page;
+    doc["total_pages"] = totalPages;
+    doc["total_records"] = totalRegistros;
+    
+    JsonArray arr = doc["data"].to<JsonArray>();
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, limit);
+        sqlite3_bind_int(stmt, 2, offset);
+        
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            JsonObject obj = arr.add<JsonObject>();
+            obj["id"] = sqlite3_column_int(stmt, 0);
+            obj["slot"] = sqlite3_column_int(stmt, 1);
+            obj["producto"] = (const char*)sqlite3_column_text(stmt, 2);
+            obj["metodo"] = (const char*)sqlite3_column_text(stmt, 3);
+            obj["precio"] = sqlite3_column_int(stmt, 4);
+            obj["estado"] = (const char*)sqlite3_column_text(stmt, 5);
+            obj["secuencia"] = sqlite3_column_int(stmt, 6);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    xSemaphoreGive(_mutex);
+
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+bool VmDatabase::addProduct(const char* nombre, uint32_t costoCentavos) {
+    char sql[128];
+    // Se inserta activo = 1 por defecto
+    snprintf(sql, sizeof(sql),
+        "INSERT INTO productos (nombre, costo_referencia, activo) VALUES ('%s', %lu, 1);",
+        nombre, (unsigned long)costoCentavos);
+    return execSql(sql);
+}
+
+bool VmDatabase::setProductActive(uint32_t productId, bool activo) {
+    char sql[128];
+    snprintf(sql, sizeof(sql),
+        "UPDATE productos SET activo = %d WHERE id_producto = %u;",
+        activo ? 1 : 0, productId);
+    return execSql(sql);
+}
