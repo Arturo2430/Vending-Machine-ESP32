@@ -17,6 +17,14 @@ public:
     typedef void (*StatusUpdateCallback)(uint8_t door, uint8_t barrier,
                                           uint8_t mode, uint32_t currentTxId);
     typedef void (*HandshakeCallback)(uint8_t megaVersionMajor, uint8_t megaVersionMinor);
+    /**
+     * @brief Callback emitido al recibir un ACK del Mega.
+     *
+     * Parámetros: cmdReferenciado, resultado (VM_ACK_RECEIVED/REJECTED), motivo.
+     * Útil para que la FSM detecte si el Mega aceptó o rechazó un VEND antes
+     * de moverse al estado S8_DISPENSANDO.
+     */
+    typedef void (*AckCallback)(uint8_t cmdRef, uint8_t result, uint8_t reason);
 
     VmEsp32Controller();
 
@@ -42,6 +50,8 @@ public:
     void onKeyEvent(KeyEventCallback callback);
     void onVendResult(VendResultCallback callback);
     void onStatusUpdate(StatusUpdateCallback callback);
+    /** Registra el callback de ACK (opcional). */
+    void onAck(AckCallback callback);
 
     // ------------------------------------------------------------
     // Acciones que el ESP32 puede iniciar
@@ -79,10 +89,11 @@ private:
     bool _handshakeComplete;
     uint32_t _nextTxId;  // Contador monotónico en RAM (ver nota abajo)
 
-    KeyEventCallback _onKey;
-    VendResultCallback _onVendResult;
+    KeyEventCallback    _onKey;
+    VendResultCallback  _onVendResult;
     StatusUpdateCallback _onStatusUpdate;
-    HandshakeCallback _onHandshake;
+    HandshakeCallback   _onHandshake;
+    AckCallback         _onAck;
 
     uint32_t generateTransactionId();
     void handleIncomingFrame(uint8_t cmd, uint8_t seq, const uint8_t* payload, uint8_t len);
@@ -91,3 +102,4 @@ private:
 };
 
 #endif // VM_ESP32_CONTROLLER_H
+

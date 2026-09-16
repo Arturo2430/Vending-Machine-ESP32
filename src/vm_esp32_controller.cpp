@@ -14,7 +14,8 @@ VmEsp32Controller::VmEsp32Controller()
       _onKey(nullptr),
       _onVendResult(nullptr),
       _onStatusUpdate(nullptr),
-      _onHandshake(nullptr) {
+      _onHandshake(nullptr),
+      _onAck(nullptr) {
 }
 
 void VmEsp32Controller::begin(VmUartLink& link) {
@@ -50,6 +51,10 @@ void VmEsp32Controller::onVendResult(VendResultCallback callback) {
 
 void VmEsp32Controller::onStatusUpdate(StatusUpdateCallback callback) {
     _onStatusUpdate = callback;
+}
+
+void VmEsp32Controller::onAck(AckCallback callback) {
+    _onAck = callback;
 }
 
 void VmEsp32Controller::requestStatus() {
@@ -144,10 +149,15 @@ void VmEsp32Controller::handleIncomingFrame(uint8_t cmd, uint8_t seq,
         case VM_CMD_ACK: {
             // Confirmación a algo que el ESP32 envió previamente.
             // UART-REQ-005: un ACK nunca genera otro ACK.
-            // TODO (capa superior): si se requiere correlacionar ACKs
-            // con comandos pendientes (p. ej. detectar BUSY en
-            // SET_MODE o DUPLICATE_CONFLICT en VEND), hacerlo aquí
-            // exponiendo un callback adicional (onAck).
+            if (len == VM_LEN_ACK && payload != nullptr) {
+                uint8_t cmdRef = payload[0];
+                uint8_t result = payload[1];
+                uint8_t reason = payload[2];
+
+                if (_onAck != nullptr) {
+                    _onAck(cmdRef, result, reason);
+                }
+            }
             break;
         }
 
