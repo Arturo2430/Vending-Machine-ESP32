@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file vm_database.h
  * @brief Repositorio SQLite para la Máquina Expendedora SAID.
  *
@@ -179,6 +179,16 @@ public:
 
     /** Activar o desactivar un producto del catálogo (No se borran por historial) */
     bool setProductActive(uint32_t productId, bool activo);
+
+    /** Obtener todos los productos en JSON */
+    String getProductsJson();
+
+    /** Cambiar el producto asignado a un canal */
+    bool updateSlotProduct(uint8_t slotId, uint32_t productId);
+
+    /** Registrar tarjeta desde la web */
+    bool registerCardWeb(const char* uid, uint32_t initialBalance);
+    bool setCardActive(const char* uid, bool active);
 
 private:
     sqlite3*          _db;

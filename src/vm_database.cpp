@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file vm_database.cpp
  * @brief Implementación del repositorio SQLite para la Máquina Expendedora SAID.
  *
@@ -427,11 +427,7 @@ bool VmDatabase::updateSlotStock(uint8_t slotId, uint32_t newStock) {
 String VmDatabase::getSlotsJson() {
     xSemaphoreTake(_mutex, portMAX_DELAY);
 
-    const char* sql =
-        "SELECT s.id_slot, p.nombre, s.precio_centavos, s.stock, s.habilitado "
-        "FROM slots s "
-        "LEFT JOIN productos p ON p.id_producto = s.id_producto "
-        "ORDER BY s.id_slot;";
+    const char* sql = "SELECT s.id_slot, p.nombre, s.precio_centavos, s.stock, s.habilitado, s.capacidad, s.version FROM slots s LEFT JOIN productos p ON p.id_producto = s.id_producto ORDER BY s.id_slot;";
 
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
@@ -441,10 +437,16 @@ String VmDatabase::getSlotsJson() {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             JsonObject obj = arr.add<JsonObject>();
             obj["id"]       = sqlite3_column_int(stmt, 0);
-            obj["producto"] = (const char*)sqlite3_column_text(stmt, 1);
-            obj["precio"]   = sqlite3_column_int(stmt, 2);
+            if (sqlite3_column_type(stmt, 1) != SQLITE_NULL) {
+                obj["product"] = (const char*)sqlite3_column_text(stmt, 1);
+            } else {
+                obj["product"] = (char*)0;
+            }
+            obj["price"]    = sqlite3_column_int(stmt, 2);
             obj["stock"]    = sqlite3_column_int(stmt, 3);
-            obj["activo"]   = sqlite3_column_int(stmt, 4) == 1;
+            obj["active"]   = sqlite3_column_int(stmt, 4) == 1;
+            obj["capacity"] = sqlite3_column_int(stmt, 5);
+            obj["version"]  = sqlite3_column_int(stmt, 6);
         }
         sqlite3_finalize(stmt);
     }
@@ -459,7 +461,7 @@ String VmDatabase::getSlotsJson() {
 
 String VmDatabase::getAllCardsJson() {
     xSemaphoreTake(_mutex, portMAX_DELAY);
-    const char* sql = "SELECT id_tarjeta, uid, habilitada FROM tarjetas_demo;";
+    const char* sql = "SELECT id_tarjeta, uid, saldo_centavos, habilitada FROM tarjetas_demo;";
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     sqlite3_stmt* stmt = nullptr;
@@ -468,7 +470,8 @@ String VmDatabase::getAllCardsJson() {
             JsonObject obj = arr.add<JsonObject>();
             obj["id"] = sqlite3_column_int(stmt, 0);
             obj["uid"] = (const char*)sqlite3_column_text(stmt, 1);
-            obj["habilitada"] = sqlite3_column_int(stmt, 2) == 1;
+            obj["balance"] = sqlite3_column_int(stmt, 2);
+            obj["active"] = sqlite3_column_int(stmt, 3) == 1;
         }
         sqlite3_finalize(stmt);
     }
@@ -607,8 +610,8 @@ bool VmDatabase::addProduct(const char* nombre, uint32_t costoCentavos) {
     char sql[128];
     // Se inserta activo = 1 por defecto
     snprintf(sql, sizeof(sql),
-        "INSERT INTO productos (nombre, costo_referencia, activo) VALUES ('%s', %lu, 1);",
-        nombre, (unsigned long)costoCentavos);
+        "INSERT INTO productos (codigo_unico, nombre, costo_referencia, activo) VALUES ('P-%lu', '%s', %lu, 1);",
+        (unsigned long)millis(), nombre, (unsigned long)costoCentavos);
     return execSql(sql);
 }
 
@@ -619,3 +622,69 @@ bool VmDatabase::setProductActive(uint32_t productId, bool activo) {
         activo ? 1 : 0, productId);
     return execSql(sql);
 }
+
+String VmDatabase::getProductsJson() {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    const char* sql = "SELECT id_producto, nombre, costo_referencia, activo FROM productos;";
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            JsonObject obj = arr.add<JsonObject>();
+            obj["id"] = sqlite3_column_int(stmt, 0);
+            obj["name"] = (const char*)sqlite3_column_text(stmt, 1);
+            obj["cost"] = sqlite3_column_int(stmt, 2);
+            obj["active"] = sqlite3_column_int(stmt, 2) == 1;
+            
+        }
+        sqlite3_finalize(stmt);
+    }
+    xSemaphoreGive(_mutex);
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+bool VmDatabase::updateSlotProduct(uint8_t slotId, uint32_t productId) {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+
+    char sql[128];
+    snprintf(sql, sizeof(sql), "SELECT costo_referencia FROM productos WHERE id_producto = %u LIMIT 1;", productId);
+
+    uint32_t nuevoPrecio = 0;
+    bool found = false;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            nuevoPrecio = sqlite3_column_int(stmt, 0);
+            found = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    bool ok = false;
+    if (found) {
+        snprintf(sql, sizeof(sql), "UPDATE slots SET id_producto = %u, precio_centavos = %lu, version = version + 1 WHERE id_slot = %u;", productId, (unsigned long)nuevoPrecio, slotId);
+        ok = execSqlLocked(sql);
+    }
+
+    xSemaphoreGive(_mutex);
+    return ok;
+}
+
+bool VmDatabase::setCardActive(const char* uid, bool active) {
+    char sql[128];
+    snprintf(sql, sizeof(sql), "UPDATE tarjetas_demo SET habilitada = %d WHERE uid = '%s';", active ? 1 : 0, uid);
+    return execSql(sql);
+}
+
+bool VmDatabase::registerCardWeb(const char* uid, uint32_t initialBalance) {
+    char sql[128];
+    snprintf(sql, sizeof(sql), "INSERT INTO tarjetas_demo (uid, saldo_centavos, reserva_centavos, habilitada) VALUES ('%s', %lu, 0, 1);", uid, initialBalance);
+    return execSql(sql);
+}
+
+
+
+

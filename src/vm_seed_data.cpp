@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file vm_seed_data.cpp
  * @brief Implementación del semillado automático de la base de datos SQLite.
  *
@@ -53,6 +53,7 @@ static const char DDL_PRODUCTOS[] =
     "  id_producto  INTEGER PRIMARY KEY AUTOINCREMENT,"
     "  codigo_unico TEXT    NOT NULL UNIQUE,"
     "  nombre       TEXT    NOT NULL,"
+      "  costo_referencia INTEGER NOT NULL DEFAULT 0,"
     "  activo       INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0,1))"
     ");";
 
@@ -143,11 +144,11 @@ static const char DDL_AUDIT_TABLES[] =
 // ---------------------------------------------------------------------------
 
 static const char DML_PRODUCTOS[] =
-    "INSERT OR IGNORE INTO productos (codigo_unico, nombre) VALUES"
-    "  ('PROD01','Coca-Cola 355ml'),"
-    "  ('PROD02','Galletas Marias'),"
-    "  ('PROD03','Agua 600ml'),"
-    "  ('PROD04','Jugo de Naranja');";
+    "INSERT OR IGNORE INTO productos (codigo_unico, nombre, costo_referencia) VALUES"
+    "  ('PROD01','Coca-Cola 355ml', 1800),"
+    "  ('PROD02','Galletas Marias', 1500),"
+    "  ('PROD03','Agua 600ml', 1200),"
+    "  ('PROD04','Jugo de Naranja', 1400);";
 
 // precio en centavos: $18.00 = 1800, $15.00 = 1500, $12.00 = 1200, $14.00 = 1400
 static const char DML_SLOTS[] =
