@@ -82,7 +82,7 @@ void VmFsm::update() {
             // Timeout de inactividad → cancelar y volver a reposo.
             if (inactivityExpired()) {
                 Serial.println("[FSM] Timeout de inactividad → REPOSO");
-                display("  Tiempo agotado  ", "  Volviendo...   ");
+                display("  Tiempo agotado  ", "  Volviendo...   ", "", "");
                 enterState(FsmState::S2_REPOSO);
             }
             break;
@@ -113,7 +113,7 @@ void VmFsm::update() {
         case FsmState::S13_ADMIN_AUTH:
             // Timeout de inactividad en admin.
             if (inactivityExpired()) {
-                display(" Sin actividad   ", "  Saliendo...   ");
+                display(" Sin actividad   ", "  Saliendo...   ", "", "");
                 enterState(FsmState::S2_REPOSO);
             }
             break;
@@ -123,7 +123,7 @@ void VmFsm::update() {
         case FsmState::S16_MOD_PRECIO:
         case FsmState::S17_MOD_STOCK:
             if (inactivityExpired()) {
-                display(" Sin actividad   ", "  Saliendo...   ");
+                display(" Sin actividad   ", "  Saliendo...   ", "", "");
                 _setModeFn(VM_MODE_VENTA);
                 enterState(FsmState::S2_REPOSO);
             }
@@ -211,26 +211,26 @@ void VmFsm::handleRfidCard(const String& uid) {
 
     CardInfo card;
     if (!_db.checkCard(uid, card)) {
-        display("Tarjeta no       ", "  registrada     ");
+        display("Tarjeta no       ", "  registrada     ", "", "");
         return;
     }
     if (!card.enabled) {
-        display("Tarjeta          ", "  desactivada    ");
+        display("Tarjeta          ", "  desactivada    ", "", "");
         return;
     }
     uint32_t available = card.balanceCentavos - card.reserveCentavos;
     if (available < _slotInfo.priceCentavos) {
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "Saldo: $%lu.%02lu",
                  (unsigned long)(available / 100),
                  (unsigned long)(available % 100));
-        display("Saldo insuf.     ", l2);
+        display("Saldo insuf.     ", l2, "", "");
         return;
     }
 
     // Reservar saldo y pasar a dispensar.
     if (!_db.reserveCardBalance(card.cardId, _slotInfo.priceCentavos)) {
-        display("Error reserva    ", "  saldo RFID     ");
+        display("Error reserva    ", "  saldo RFID     ", "", "");
         return;
     }
 
@@ -273,13 +273,13 @@ void VmFsm::enterState(FsmState next) {
 // ---------------------------------------------------------------------------
 
 void VmFsm::onEnterArranque() {
-    display("  Iniciando...   ", "  Por favor esp. ");
+    display("  Iniciando...   ", "  Por favor esp. ", "", "");
 }
 
 void VmFsm::onEnterFallaInterna(const char* msg) {
     _state = FsmState::S1_FALLA_INTERNA;
     Serial.printf("[FSM] FALLA INTERNA: %s\n", msg);
-    display("!! FALLA INTERNA ", msg);
+    display("!! FALLA INTERNA ", msg, "", "");
 }
 
 void VmFsm::onEnterReposo() {
@@ -303,42 +303,42 @@ void VmFsm::onEnterReposo() {
 void VmFsm::onEnterSelCanal(uint8_t slot) {
     _selectedSlot = slot;
     if (!_db.getSlot(slot, _slotInfo)) {
-        display("Canal no disp.   ", "  Intente otro  ");
+        display("Canal no disp.   ", "  Intente otro  ", "", "");
         enterState(FsmState::S2_REPOSO);
         return;
     }
     if (_slotInfo.stock == 0) {
-        display("Producto agotado ", "  Elija otro    ");
+        display("Producto agotado ", "  Elija otro    ", "", "");
         enterState(FsmState::S2_REPOSO);
         return;
     }
-    char l1[17], l2[17];
-    snprintf(l1, sizeof(l1), "%-16s", _slotInfo.productName);
+    char l1[21], l2[17];
+    snprintf(l1, sizeof(l1), "%-20s", _slotInfo.productName);
     snprintf(l2, sizeof(l2), "Precio: $%lu.%02lu  ",
              (unsigned long)(_slotInfo.priceCentavos / 100),
              (unsigned long)(_slotInfo.priceCentavos % 100));
-    display(l1, l2);
+    display(l1, l2, "", "");
     _state = FsmState::S3_SEL_CANAL;
     resetInactivityTimer();
 }
 
 void VmFsm::onEnterSelPago() {
-    display("A=Efectivo       ", "B=Tarjeta  *=Sal");
+    display("A=Efectivo       ", "B=Tarjeta  *=Sal", "", "");
     resetInactivityTimer();
 }
 
 void VmFsm::onEnterEspEfectivo() {
     _insertedCentavos = 0;
-    char l2[17];
+    char l2[21];
     snprintf(l2, sizeof(l2), "Necesita:$%lu.%02lu ",
              (unsigned long)(_slotInfo.priceCentavos / 100),
              (unsigned long)(_slotInfo.priceCentavos % 100));
-    display("Inserte dinero   ", l2);
+    display("Inserte dinero   ", l2, "", "");
     resetInactivityTimer();
 }
 
 void VmFsm::onEnterEspRfid() {
-    display("Acerque tarjeta  ", "  al lector...  ");
+    display("Acerque tarjeta  ", "  al lector...  ", "", "");
     resetInactivityTimer();
 }
 
@@ -350,7 +350,7 @@ void VmFsm::onEnterReservada() {
     if (!_db.reserveSlot(_selectedSlot, metodo, cardId,
                          _slotInfo.priceCentavos, _slotInfo.productName,
                          _dbTxId)) {
-        display("Error al reservar", "  stock BD       ");
+        display("Error al reservar", "  stock BD       ", "", "");
         // Si fue RFID, liberar la reserva de saldo ya hecha.
         if (_paymentMethod == 1) {
             _db.releaseCardBalance(cardId, _slotInfo.priceCentavos);
@@ -359,14 +359,14 @@ void VmFsm::onEnterReservada() {
         return;
     }
 
-    display("Procesando...    ", "  Dispensando   ");
+    display("Procesando...    ", "  Dispensando   ", "", "");
     sendVend();
     enterState(FsmState::S8_DISPENSANDO);
 }
 
 void VmFsm::onEnterDispensando() {
     _motorTimer = millis();
-    display("Dispensando...   ", "  Por favor esp.");
+    display("Dispensando...   ", "  Por favor esp.", "", "");
 }
 
 void VmFsm::onEnterConfirmada() {
@@ -388,14 +388,14 @@ void VmFsm::onEnterFallaDisp() {
     uint32_t cardId = (_paymentMethod == 1) ? _activeCard.cardId : 0;
     _db.revertSale(_selectedSlot, _dbTxId, cardId, _slotInfo.priceCentavos);
 
-    display("Error al dispen. ", "Reintente/llame ");
+    display("Error al dispen. ", "Reintente/llame ", "", "");
     // Devolver efectivo insertado (informativo en pantalla; sin tolva).
     if (_paymentMethod == 0 && _insertedCentavos > 0) {
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "Devuelva:$%lu.%02lu",
                  (unsigned long)(_insertedCentavos / 100),
                  (unsigned long)(_insertedCentavos % 100));
-        display("Devol. efectivo  ", l2);
+        display("Devol. efectivo  ", l2, "", "");
     }
     // Volver a reposo después de 3 s (se implementa con el timer de inactividad).
     _inactivityTimer = millis() - VM_TIMEOUT_INACTIVITY_MS + 3000UL;
@@ -423,15 +423,15 @@ void VmFsm::onEnterAdminAuth() {
     // Comprobar bloqueo por intentos fallidos.
     if (_pinLockoutEnd > 0 && millis() < _pinLockoutEnd) {
         uint32_t secsLeft = (_pinLockoutEnd - millis()) / 1000UL;
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "Espere %lus      ", (unsigned long)secsLeft);
-        display("Bloqueado        ", l2);
+        display("Bloqueado        ", l2, "", "");
         enterState(FsmState::S2_REPOSO);
         return;
     }
     _pinLen = 0;
     memset(_pinBuffer, 0, sizeof(_pinBuffer));
-    display("PIN Admin:       ", "                ");
+    display("PIN Admin:       ", "                ", "", "");
     resetInactivityTimer();
 
     // Solicitar modo mantenimiento al Mega para detener actuadores.
@@ -446,7 +446,7 @@ void VmFsm::onEnterAdminCanal() {
     for (uint8_t s = 1; s <= 4; s++) {
         SlotInfo si;
         if (_db.getSlot(s, si)) {
-            char l1[17], l2[17];
+            char l1[21], l2[17];
             snprintf(l1, sizeof(l1), "Canal %u: %-8s", s, si.productName);
             snprintf(l2, sizeof(l2), "Stock:%lu/%lu Px$%lu",
                      (unsigned long)si.stock,
@@ -460,16 +460,16 @@ void VmFsm::onEnterAdminCanal() {
 }
 
 void VmFsm::onEnterAdminAccion() {
-    char l1[17];
+    char l1[21];
     snprintf(l1, sizeof(l1), "Canal %u          ", _adminSlot);
-    display(l1, "1=Precio 2=Stock ");
+    display(l1, "1=Precio 2=Stock ", "", "");
     resetInactivityTimer();
 }
 
 void VmFsm::onEnterModPrecio() {
     clearNumBuffer();
     SlotInfo si;
-    char l2[17];
+    char l2[21];
     if (_db.getSlot(_adminSlot, si)) {
         snprintf(l2, sizeof(l2), "Actual:$%lu.%02lu   ",
                  (unsigned long)(si.priceCentavos / 100),
@@ -477,14 +477,14 @@ void VmFsm::onEnterModPrecio() {
     } else {
         strncpy(l2, "               ", sizeof(l2));
     }
-    display("Nuevo precio:    ", l2);
+    display("Nuevo precio:    ", l2, "", "");
     resetInactivityTimer();
 }
 
 void VmFsm::onEnterModStock() {
     clearNumBuffer();
     SlotInfo si;
-    char l2[17];
+    char l2[21];
     if (_db.getSlot(_adminSlot, si)) {
         snprintf(l2, sizeof(l2), "Actual: %lu/%lu     ",
                  (unsigned long)si.stock,
@@ -492,7 +492,7 @@ void VmFsm::onEnterModStock() {
     } else {
         strncpy(l2, "               ", sizeof(l2));
     }
-    display("Stock total:     ", l2);
+    display("Stock total:     ", l2, "", "");
     resetInactivityTimer();
 }
 
@@ -537,11 +537,11 @@ void VmFsm::processKeyEspEfectivo(KeyAction action) {
     if (action == KeyAction::CANCEL) {
         // Devolver dinero ya insertado (informativo).
         if (_insertedCentavos > 0) {
-            char l2[17];
+            char l2[21];
             snprintf(l2, sizeof(l2), "Devuelva:$%lu.%02lu",
                      (unsigned long)(_insertedCentavos / 100),
                      (unsigned long)(_insertedCentavos % 100));
-            display("Cancelado        ", l2);
+            display("Cancelado        ", l2, "", "");
         }
         enterState(FsmState::S2_REPOSO);
         return;
@@ -557,7 +557,7 @@ void VmFsm::processKeyEspEfectivo(KeyAction action) {
         _db.addCoins(coinValue, 1);
     }
 
-    char l1[17], l2[17];
+    char l1[21], l2[17];
     snprintf(l1, sizeof(l1), "Insertado:$%lu.%02lu",
              (unsigned long)(_insertedCentavos / 100),
              (unsigned long)(_insertedCentavos % 100));
@@ -565,7 +565,7 @@ void VmFsm::processKeyEspEfectivo(KeyAction action) {
     if (falta > 0) {
         snprintf(l2, sizeof(l2), "Faltan: $%ld.%02ld  ",
                  (long)(falta / 100), (long)(falta % 100));
-        display(l1, l2);
+        display(l1, l2, "", "");
     } else {
         // Suficiente dinero insertado.
         enterState(FsmState::S7_RESERVADA);
@@ -579,10 +579,10 @@ void VmFsm::processKeyAdminAuth(KeyAction action) {
         _pinBuffer[_pinLen++] = '0' + digit;
         _pinBuffer[_pinLen]   = '\0';
         // Mostrar asteriscos.
-        char mask[17] = "PIN: ";
+        char mask[21] = "PIN: ";
         for (uint8_t i = 0; i < _pinLen; i++) mask[5 + i] = '*';
         mask[5 + _pinLen] = '\0';
-        display(mask, "A=OK  B=Cancelar");
+        display(mask, "A=OK  B=Cancelar", "", "");
         return;
     }
     if (action == KeyAction::BACKSPACE && _pinLen > 0) {
@@ -605,11 +605,11 @@ void VmFsm::processKeyAdminAuth(KeyAction action) {
             if (_pinFailCount >= 3) {
                 _pinLockoutEnd = millis() + VM_PIN_LOCKOUT_MS;
                 _pinFailCount  = 0;
-                display("Bloqueado 30s    ", "Demasiados err. ");
+                display("Bloqueado 30s    ", "Demasiados err. ", "", "");
                 _setModeFn(VM_MODE_VENTA);
                 enterState(FsmState::S2_REPOSO);
             } else {
-                display("PIN incorrecto   ", "Intente de nuevo");
+                display("PIN incorrecto   ", "Intente de nuevo", "", "");
                 _pinLen = 0;
                 memset(_pinBuffer, 0, sizeof(_pinBuffer));
             }
@@ -643,9 +643,9 @@ void VmFsm::processKeyAdminAccion(KeyAction action) {
 void VmFsm::processKeyModPrecio(KeyAction action) {
     if (action >= KeyAction::DIGIT_0 && action <= KeyAction::DIGIT_9) {
         appendNumBuffer((uint8_t)action - (uint8_t)KeyAction::DIGIT_0);
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "$%s             ", _numBuffer);
-        display("Nuevo precio:    ", l2);
+        display("Nuevo precio:    ", l2, "", "");
         return;
     }
     if (action == KeyAction::BACKSPACE) { backspaceNumBuffer(); return; }
@@ -653,11 +653,11 @@ void VmFsm::processKeyModPrecio(KeyAction action) {
     if (action == KeyAction::CONFIRM) {
         uint32_t pesos = numBufferValue();
         uint32_t centavos = pesos * 100;
-        if (pesos == 0) { display("Precio invalido  ", "               "); return; }
+        if (pesos == 0) { display("Precio invalido  ", "               ", "", ""); return; }
         if (_db.updateSlotPrice(_adminSlot, centavos)) {
-            display("Precio guardado  ", "               ");
+            display("Precio guardado  ", "               ", "", "");
         } else {
-            display("Error al guardar ", "               ");
+            display("Error al guardar ", "               ", "", "");
         }
         enterState(FsmState::S14_ADMIN_CANAL);
     }
@@ -666,9 +666,9 @@ void VmFsm::processKeyModPrecio(KeyAction action) {
 void VmFsm::processKeyModStock(KeyAction action) {
     if (action >= KeyAction::DIGIT_0 && action <= KeyAction::DIGIT_9) {
         appendNumBuffer((uint8_t)action - (uint8_t)KeyAction::DIGIT_0);
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "Stock: %s       ", _numBuffer);
-        display("Stock total:     ", l2);
+        display("Stock total:     ", l2, "", "");
         return;
     }
     if (action == KeyAction::BACKSPACE) { backspaceNumBuffer(); return; }
@@ -676,9 +676,9 @@ void VmFsm::processKeyModStock(KeyAction action) {
     if (action == KeyAction::CONFIRM) {
         uint32_t newStock = numBufferValue();
         if (_db.updateSlotStock(_adminSlot, newStock)) {
-            display("Stock guardado   ", "               ");
+            display("Stock guardado   ", "               ", "", "");
         } else {
-            display("Error al guardar ", "(cap. excedida?)");
+            display("Error al guardar ", "(cap. excedida?)", "", "");
         }
         enterState(FsmState::S14_ADMIN_CANAL);
     }
@@ -700,8 +700,8 @@ bool VmFsm::motorTimerExpired() const {
     return (millis() - _motorTimer) >= VM_TIMEOUT_MOTOR_MS;
 }
 
-void VmFsm::display(const char* l1, const char* l2) {
-    if (_displayFn) _displayFn(l1, l2);
+void VmFsm::display(const char* l1, const char* l2, const char* l3, const char* l4) {
+    if (_displayFn) _displayFn(l1, l2, l3, l4);
 }
 
 bool VmFsm::sendVend() {
@@ -713,21 +713,25 @@ bool VmFsm::sendVend() {
 
 void VmFsm::buildReposoCarousel() {
     _carousel.clear();
-    _carousel.addSlide("  SAID VENDING  ", "  Elija 1-4     ");
+    char line1[21], line2[21];
+    snprintf(line1, sizeof(line1), "%-20s", "  SAID VENDING  ");
+    snprintf(line2, sizeof(line2), "%-20s", " Selecc. un canal ");
+    _carousel.addSlide(line1, line2, "                    ", "                    ");
 
-    for (uint8_t s = 1; s <= 4; s++) {
-        SlotInfo si;
-        if (_db.getSlot(s, si)) {
-            char l1[17], l2[17];
-            snprintf(l1, sizeof(l1), "%u:%-15s", s, si.productName);
-            snprintf(l2, sizeof(l2), "  $%lu.%02lu  Stock:%lu",
-                     (unsigned long)(si.priceCentavos / 100),
-                     (unsigned long)(si.priceCentavos % 100),
-                     (unsigned long)si.stock);
-            _carousel.addSlide(l1, l2);
+    for (uint8_t slot = 1; slot <= 4; slot++) {
+        SlotInfo info;
+        if (_db.getSlotInfo(slot, info) && info.habilitado) {
+            snprintf(line1, sizeof(line1), "Ch%d: %s", slot, info.nombre.c_str());
+            char priceStr[21];
+            snprintf(priceStr, sizeof(priceStr), "$%d.%02d", info.precioCentavos / 100, info.precioCentavos % 100);
+            if (info.stock == 0) {
+                snprintf(line2, sizeof(line2), "%-9s [AGOTADO]", priceStr);
+            } else {
+                snprintf(line2, sizeof(line2), "%-9s Stock:%02d", priceStr, info.stock);
+            }
+            _carousel.addSlide(line1, line2, "                    ", "                    ");
         }
     }
-    _carousel.start();
 }
 
 void VmFsm::buildFinCarousel() {
@@ -735,7 +739,7 @@ void VmFsm::buildFinCarousel() {
     _carousel.addSlide("Gracias por su  ", "  compra!       ");
 
     if (_changeResult.changeCentavos > 0) {
-        char l2[17];
+        char l2[21];
         snprintf(l2, sizeof(l2), "Cambio:$%lu.%02lu  ",
                  (unsigned long)(_changeResult.changeCentavos / 100),
                  (unsigned long)(_changeResult.changeCentavos % 100));
@@ -745,8 +749,8 @@ void VmFsm::buildFinCarousel() {
         const char* labels[] = {"$10: ", "$5:  ", "$2:  ", "$1:  "};
         for (uint8_t i = 0; i < CHANGE_DENOM_COUNT; i++) {
             if (_changeResult.coins[i] > 0) {
-                char l1[17], l2b[17];
-                snprintf(l1, sizeof(l1), "%-16s", labels[i]);
+                char l1[21], l2b[17];
+                snprintf(l1, sizeof(l1), "%-20s", labels[i]);
                 snprintf(l2b, sizeof(l2b), "  %lu moneda(s)  ",
                          (unsigned long)_changeResult.coins[i]);
                 _carousel.addSlide(l1, l2b);
@@ -754,14 +758,14 @@ void VmFsm::buildFinCarousel() {
         }
 
         if (_changeResult.debtCentavos > 0) {
-            char ld[17];
+            char ld[21];
             snprintf(ld, sizeof(ld), "Adeudo:$%lu.%02lu  ",
                      (unsigned long)(_changeResult.debtCentavos / 100),
                      (unsigned long)(_changeResult.debtCentavos % 100));
             _carousel.addSlide("Sin cambio suf.  ", ld);
         }
     } else if (_paymentMethod == 1) {
-        char l2[17];
+        char l2[21];
         uint32_t newBal = _activeCard.balanceCentavos - _slotInfo.priceCentavos;
         snprintf(l2, sizeof(l2), "Saldo:$%lu.%02lu    ",
                  (unsigned long)(newBal / 100),

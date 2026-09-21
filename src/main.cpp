@@ -32,7 +32,6 @@
 #include "vm_esp32_controller.h"
 #include "vm_database.h"
 #include "vm_web_server.h"
-#include "vm_rfid.h"
 #include "vm_fsm.h"
 
 // ---------------------------------------------------------------------------
@@ -43,11 +42,10 @@ static VmUartLink        uartLink;
 static VmEsp32Controller controller;
 static VmDatabase        vendingDB;
 static VmWebServer       webServer(&vendingDB);
-static VmRfid            rfid;
 static VmFsm*            fsmPtr = nullptr; // Asignado en setup() tras construir con referencia a DB.
 
 // ---------------------------------------------------------------------------
-// Adaptadores: conectan los callbacks del controller y rfid hacia la FSM.
+// Adaptadores: conectan los callbacks del controller hacia la FSM.
 // (Funciones libres estáticas para evitar captura de this en lambdas globales.)
 // ---------------------------------------------------------------------------
 
@@ -79,7 +77,8 @@ static void onAckReceived(uint8_t cmdRef, uint8_t result, uint8_t reason) {
     // o via el RESULT posterior.  Un ACK de rechazo aquí es informativo.
 }
 
-static void onRfidCard(const String& uid) {
+static void onRfidCardReceived(const String& uid) {
+    Serial.printf("[UART] Tarjeta RFID recibida: %s\n", uid.c_str());
     if (fsmPtr) fsmPtr->handleRfidCard(uid);
 }
 
@@ -91,8 +90,8 @@ static uint32_t fsmVend(uint8_t channel) {
     return controller.vend(channel);
 }
 
-static void fsmDisplay(const char* l1, const char* l2) {
-    controller.updateDisplay(l1, l2);
+static void fsmDisplay(const char* l1, const char* l2, const char* l3, const char* l4) {
+    controller.updateDisplay(l1, l2, l3, l4);
 }
 
 static void fsmSetMode(uint8_t mode) {
@@ -125,12 +124,7 @@ void setup() {
     // 3. Servidor web (SoftAP + HTTP asíncrono).
     webServer.begin();
 
-    // 4. Lector RFID (falla silenciosa si el módulo no está conectado).
-    rfid.onCard(onRfidCard);
-    if (!rfid.begin()) {
-        Serial.println("[RFID] Módulo no detectado; pago RFID deshabilitado.");
-        Serial.println("       Verificar: alimentacion 3.3V, pines SPI, cableado.");
-    }
+    // 4. Lector RFID: ahora manejado por el Mega (v2.1).
 
     // 5. UART hacia el Mega.
     Serial.println("[UART] Inicializando enlace con el Mega...");
@@ -146,6 +140,7 @@ void setup() {
     controller.onVendResult(onVendResultReceived);
     controller.onStatusUpdate(onStatusReceived);
     controller.onAck(onAckReceived);
+    controller.onRfidCard(onRfidCardReceived); // Nuevo en v2.1
 
     // 6. Máquina de estados.
     // Se construye en el heap con new para poder pasarle la referencia a vendingDB.
@@ -165,6 +160,5 @@ void setup() {
 
 void loop() {
     uartLink.poll();   // Recibe y procesa tramas UART del Mega.
-    rfid.poll();       // Sondea nuevas tarjetas RFID.
     fsmPtr->update();  // Avanza timers y transiciones de estado.
 }

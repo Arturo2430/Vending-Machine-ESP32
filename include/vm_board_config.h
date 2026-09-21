@@ -1,15 +1,13 @@
 /**
  * @file vm_board_config.h
- * @brief Parámetros de capa física del ESP32: baudrate UART, pines GPIO para
- *        UART2 hacia el Mega y pines SPI para el lector RFID MFRC522.
+ * @brief Parámetros de capa física del ESP32: baudrate UART, pines GPIO.
  *
- * Acordados con Electrónica/Arquitectura. Ver tabla de pines ESP32 WROOM DevKit
- * en la guía de Electrónica.
+ * v2.1: RFID removido del ESP32 (ahora conectado al Mega).
+ *       LCD actualizado a 20×4 I2C.
  *
  * @warning VALIDAR que la versión final de la placa tenga exactamente estos pines
- *          antes de energizar.  Consultar al equipo de Electrónica ante cualquier
- *          duda.  Una conexión incorrecta entre niveles 5 V (Mega) y 3.3 V (ESP32)
- *          puede destruir los GPIO del ESP32 de forma permanente.
+ *          antes de energizar.  Una conexión incorrecta entre niveles 5 V (Mega) y
+ *          3.3 V (ESP32) puede destruir los GPIO del ESP32 de forma permanente.
  */
 
 #ifndef VM_BOARD_CONFIG_H
@@ -18,7 +16,6 @@
 // ============================================================
 // UART hacia el Arduino Mega (Serial2)
 // ============================================================
-// Debe ser IDÉNTICO en el firmware del Mega.
 #define VM_UART_BAUDRATE   38400
 // GPIO16 recibe datos provenientes de TX1 (D18) del Mega.
 // GPIO17 envía datos hacia   RX1 (D19) del Mega.
@@ -28,15 +25,12 @@
 #define VM_UART_TX_PIN     17
 
 // ============================================================
-// SPI — Lector RFID MFRC522
+// LCD — Características de la pantalla (para formateo de texto)
 // ============================================================
-// ⚠ Alimentar el MFRC522 SOLO desde el riel de 3.3 V del ESP32.
-//   NUNCA desde 5 V; quemaría el chip.
-#define VM_RFID_SS_PIN     21   // SDA del módulo MFRC522
-#define VM_RFID_RST_PIN    22   // RST del módulo MFRC522
-#define VM_RFID_SCK_PIN    18   // SCK SPI
-#define VM_RFID_MISO_PIN   19   // MISO SPI
-#define VM_RFID_MOSI_PIN   23   // MOSI SPI
+// LCD I2C 20×4 en el Mega (dirección 0x27).
+// El ESP32 no controla el LCD directamente; envía DISPLAY vía UART.
+#define VM_LCD_COLS        20
+#define VM_LCD_ROWS         4
 
 // ============================================================
 // Timeouts de la FSM (en milisegundos)
@@ -58,5 +52,8 @@
 
 // Penalización por 3 intentos fallidos de PIN de administrador.
 #define VM_PIN_LOCKOUT_MS             30000UL  // 30 s
+
+// Timeout de espera de tarjeta RFID en estado S6.
+#define VM_RFID_TIMEOUT_MS            30000UL  // 30 s
 
 #endif // VM_BOARD_CONFIG_H

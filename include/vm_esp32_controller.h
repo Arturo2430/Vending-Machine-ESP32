@@ -25,6 +25,9 @@ public:
      * de moverse al estado S8_DISPENSANDO.
      */
     typedef void (*AckCallback)(uint8_t cmdRef, uint8_t result, uint8_t reason);
+    
+    /** Callback para el comando RFID_CARD (v2.1) */
+    typedef void (*RfidCardCallback)(const String& uidHex);
 
     VmEsp32Controller();
 
@@ -52,6 +55,8 @@ public:
     void onStatusUpdate(StatusUpdateCallback callback);
     /** Registra el callback de ACK (opcional). */
     void onAck(AckCallback callback);
+    /** Registra el callback de tarjeta RFID (opcional). */
+    void onRfidCard(RfidCardCallback callback);
 
     // ------------------------------------------------------------
     // Acciones que el ESP32 puede iniciar
@@ -77,12 +82,12 @@ public:
     uint32_t vend(uint8_t channel);
 
     /**
-     * Actualiza el LCD. text1/text2 son cadenas normales terminadas en
+     * Actualiza el LCD 20x4 (v2.1). Las cadenas son normales terminadas en
      * '\0' (no requieren venir ya paddeadas); esta función se encarga
-     * de recortar/rellenar a 16 caracteres y sustituir símbolos fuera
+     * de recortar/rellenar a 20 caracteres y sustituir símbolos fuera
      * de rango ASCII imprimible por '?'.
      */
-    void updateDisplay(const char* text1, const char* text2);
+    void updateDisplay(const char* text1, const char* text2, const char* text3, const char* text4);
 
 private:
     VmUartLink* _link;
@@ -94,6 +99,7 @@ private:
     StatusUpdateCallback _onStatusUpdate;
     HandshakeCallback   _onHandshake;
     AckCallback         _onAck;
+    RfidCardCallback    _onRfidCard;
 
     uint32_t generateTransactionId();
     void handleIncomingFrame(uint8_t cmd, uint8_t seq, const uint8_t* payload, uint8_t len);

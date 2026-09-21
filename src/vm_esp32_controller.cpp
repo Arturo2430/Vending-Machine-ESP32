@@ -108,12 +108,7 @@ void VmEsp32Controller::updateDisplay(const char* text1, const char* text2) {
 
 uint32_t VmEsp32Controller::generateTransactionId() {
     // NOTA: contador en RAM, se reinicia a VM_TX_ID_MIN en cada
-    // arranque del ESP32. El contrato (2.4) solo exige que el ESP32
-    // sea el único generador y que se respete el rango operativo;
-    // no exige persistencia entre reinicios. Si el diseño de
-    // negocio requiere IDs que sobrevivan a un reinicio (para
-    // correlacionar con SQLite tras un corte de energía), sustituir
-    // este contador por uno leído/incrementado en la base de datos.
+    // arranque del ESP32.
     uint32_t txId = _nextTxId;
 
     if (_nextTxId >= VM_TX_ID_MAX) {
@@ -122,6 +117,22 @@ uint32_t VmEsp32Controller::generateTransactionId() {
         _nextTxId++;
     }
     return txId;
+}
+
+void VmEsp32Controller::updateDisplay(const char* text1, const char* text2, const char* text3, const char* text4) {
+    if (_link == nullptr) {
+        return;
+    }
+    char line1[VM_DISPLAY_LINE_LEN];
+    char line2[VM_DISPLAY_LINE_LEN];
+    char line3[VM_DISPLAY_LINE_LEN];
+    char line4[VM_DISPLAY_LINE_LEN];
+    VmUartLink::padDisplayLine(text1, line1);
+    VmUartLink::padDisplayLine(text2, line2);
+    VmUartLink::padDisplayLine(text3, line3);
+    VmUartLink::padDisplayLine(text4, line4);
+    uint8_t seq = _link->nextSeq();
+    _link->sendDisplay(seq, line1, line2, line3, line4);
 }
 
 void VmEsp32Controller::handleIncomingFrame(uint8_t cmd, uint8_t seq,
@@ -134,7 +145,6 @@ void VmEsp32Controller::handleIncomingFrame(uint8_t cmd, uint8_t seq,
             if (len == VM_LEN_HELLO && payload != nullptr) {
                 uint8_t megaMajor = payload[0];
                 uint8_t megaMinor = payload[1];
-                // uint8_t megaRole = payload[2]; // debería ser VM_ROLE_MEGA
 
                 _link->sendHello(seq, VM_ROLE_ESP32);
                 _handshakeComplete = true;
@@ -208,10 +218,29 @@ void VmEsp32Controller::handleIncomingFrame(uint8_t cmd, uint8_t seq,
             break;
         }
 
+        case VM_CMD_RFID_CARD: {
+            // El Mega leyó una tarjeta RFID y nos manda el UID. (v2.1)
+            if (len >= VM_LEN_RFID_CARD_MIN && payload != nullptr) {
+                char uidBuf[VM_LEN_RFID_CARD_MAX + 1] = {0};
+                uint8_t copyLen = (len > VM_LEN_RFID_CARD_MAX) ? VM_LEN_RFID_CARD_MAX : len;
+                memcpy(uidBuf, payload, copyLen);
+                String uidHex(uidBuf);
+
+                // Confirmar recepción.
+                _link->sendAck(seq, VM_CMD_RFID_CARD, VM_ACK_RECEIVED, VM_REASON_NONE);
+
+                if (_onRfidCard != nullptr) {
+                    _onRfidCard(uidHex);
+                }
+            } else {
+                _link->sendAck(seq, VM_CMD_RFID_CARD, VM_ACK_REJECTED, VM_REASON_INVALID_LENGTH);
+            }
+            break;
+        }
+
         case VM_CMD_HEARTBEAT: {
             // Eco de un HEARTBEAT que el ESP32 mismo originó; no
-            // requiere acción adicional (podría usarse para medir
-            // latencia si se guarda un timestamp por SEQ).
+            // requiere acción adicional.
             break;
         }
 

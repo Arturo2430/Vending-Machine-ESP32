@@ -1,6 +1,7 @@
 /**
  * @file vm_uart_link.cpp
  * @brief Implementación de VmUartLink (ver vm_uart_link.h).
+ *        Protocolo v2.1: DISPLAY 4×20, RFID_CARD.
  */
 
 #include "vm_uart_link.h"
@@ -21,7 +22,7 @@ void VmUartLink::onFrame(FrameCallback callback) {
 
 uint8_t VmUartLink::nextSeq() {
     uint8_t seq = _txSeq;
-    _txSeq = (uint8_t)(_txSeq + 1);  // incremento módulo 256 (2.5)
+    _txSeq = (uint8_t)(_txSeq + 1);
     return seq;
 }
 
@@ -38,46 +39,29 @@ void VmUartLink::resetParser() {
 }
 
 void VmUartLink::poll() {
-    if (_serial == nullptr) {
-        return;
-    }
+    if (_serial == nullptr) return;
     while (_serial->available() > 0) {
         int b = _serial->read();
-        if (b < 0) {
-            break;
-        }
+        if (b < 0) break;
         handleByte((uint8_t)b);
     }
 }
 
 void VmUartLink::handleByte(uint8_t b) {
     switch (_state) {
-
         case WAIT_SOF1:
-            if (b == VM_SOF1) {
-                _state = WAIT_SOF2;
-            }
-            // Si no es SOF1, se descarta y se sigue buscando (3.3).
+            if (b == VM_SOF1) _state = WAIT_SOF2;
             break;
 
         case WAIT_SOF2:
-            if (b == VM_SOF2) {
-                _state = WAIT_PROTO;
-            } else if (b == VM_SOF1) {
-                // Permite resincronizar si llega SOF1 SOF1 SOF2...
-                _state = WAIT_SOF2;
-            } else {
-                _state = WAIT_SOF1;
-            }
+            if (b == VM_SOF2) _state = WAIT_PROTO;
+            else if (b == VM_SOF1) _state = WAIT_SOF2;
+            else _state = WAIT_SOF1;
             break;
 
         case WAIT_PROTO:
-            if (b == VM_PROTO_VERSION) {
-                _state = WAIT_CMD;
-            } else {
-                // Discrepancia de versión de protocolo: resincroniza (3.3).
-                resetParser();
-            }
+            if (b == VM_PROTO_VERSION) _state = WAIT_CMD;
+            else resetParser();
             break;
 
         case WAIT_CMD:
@@ -92,17 +76,13 @@ void VmUartLink::handleByte(uint8_t b) {
 
         case WAIT_LEN:
             if (b > VM_MAX_PAYLOAD_LEN) {
-                // LEN > 32: trama corrupta/desfasada, se descarta (3.3).
                 resetParser();
                 break;
             }
             _len = b;
             _payloadIndex = 0;
             if (_len == 0) {
-                // Trama completa sin payload.
-                if (_callback != nullptr) {
-                    _callback(_cmd, _seq, nullptr, 0);
-                }
+                if (_callback != nullptr) _callback(_cmd, _seq, nullptr, 0);
                 resetParser();
             } else {
                 _state = WAIT_PAYLOAD;
@@ -112,10 +92,7 @@ void VmUartLink::handleByte(uint8_t b) {
         case WAIT_PAYLOAD:
             _payload[_payloadIndex++] = b;
             if (_payloadIndex >= _len) {
-                // Trama completa con payload.
-                if (_callback != nullptr) {
-                    _callback(_cmd, _seq, _payload, _len);
-                }
+                if (_callback != nullptr) _callback(_cmd, _seq, _payload, _len);
                 resetParser();
             }
             break;
@@ -127,19 +104,11 @@ void VmUartLink::handleByte(uint8_t b) {
 // ------------------------------------------------------------
 
 void VmUartLink::sendFrame(uint8_t cmd, uint8_t seq, const uint8_t* payload, uint8_t len) {
-    if (_serial == nullptr || len > VM_MAX_PAYLOAD_LEN) {
-        return;
-    }
+    if (_serial == nullptr || len > VM_MAX_PAYLOAD_LEN) return;
 
     uint8_t header[VM_HEADER_LEN] = {
-        VM_SOF1,
-        VM_SOF2,
-        VM_PROTO_VERSION,
-        cmd,
-        seq,
-        len
+        VM_SOF1, VM_SOF2, VM_PROTO_VERSION, cmd, seq, len
     };
-
     _serial->write(header, VM_HEADER_LEN);
     if (len > 0 && payload != nullptr) {
         _serial->write(payload, len);
@@ -148,19 +117,13 @@ void VmUartLink::sendFrame(uint8_t cmd, uint8_t seq, const uint8_t* payload, uin
 
 void VmUartLink::sendHello(uint8_t seq, uint8_t role) {
     uint8_t payload[VM_LEN_HELLO] = {
-        VM_HELLO_VERSION_MAJOR,
-        VM_HELLO_VERSION_MINOR,
-        role
+        VM_HELLO_VERSION_MAJOR, VM_HELLO_VERSION_MINOR, role
     };
     sendFrame(VM_CMD_HELLO, seq, payload, VM_LEN_HELLO);
 }
 
-void VmUartLink::sendAck(uint8_t seq, uint8_t cmdReferenciado, uint8_t resultado, uint8_t motivo) {
-    uint8_t payload[VM_LEN_ACK] = {
-        cmdReferenciado,
-        resultado,
-        motivo
-    };
+void VmUartLink::sendAck(uint8_t seq, uint8_t cmdRef, uint8_t resultado, uint8_t motivo) {
+    uint8_t payload[VM_LEN_ACK] = { cmdRef, resultado, motivo };
     sendFrame(VM_CMD_ACK, seq, payload, VM_LEN_ACK);
 }
 
@@ -192,11 +155,16 @@ void VmUartLink::sendKey(uint8_t seq, uint8_t keyAscii, uint8_t keySeq) {
     sendFrame(VM_CMD_KEY, seq, payload, VM_LEN_KEY);
 }
 
-void VmUartLink::sendDisplay(uint8_t seq, const char line1[VM_DISPLAY_LINE_LEN],
-                              const char line2[VM_DISPLAY_LINE_LEN]) {
+void VmUartLink::sendDisplay(uint8_t seq,
+                              const char line1[VM_DISPLAY_LINE_LEN],
+                              const char line2[VM_DISPLAY_LINE_LEN],
+                              const char line3[VM_DISPLAY_LINE_LEN],
+                              const char line4[VM_DISPLAY_LINE_LEN]) {
     uint8_t payload[VM_LEN_DISPLAY];
-    memcpy(payload, line1, VM_DISPLAY_LINE_LEN);
-    memcpy(payload + VM_DISPLAY_LINE_LEN, line2, VM_DISPLAY_LINE_LEN);
+    memcpy(payload,                              line1, VM_DISPLAY_LINE_LEN);
+    memcpy(payload + VM_DISPLAY_LINE_LEN,        line2, VM_DISPLAY_LINE_LEN);
+    memcpy(payload + VM_DISPLAY_LINE_LEN * 2,    line3, VM_DISPLAY_LINE_LEN);
+    memcpy(payload + VM_DISPLAY_LINE_LEN * 3,    line4, VM_DISPLAY_LINE_LEN);
     sendFrame(VM_CMD_DISPLAY, seq, payload, VM_LEN_DISPLAY);
 }
 
@@ -212,6 +180,11 @@ void VmUartLink::sendResult(uint8_t seq, uint32_t transactionId, uint8_t result)
     encodeU32LE(transactionId, &payload[0]);
     payload[4] = result;
     sendFrame(VM_CMD_RESULT, seq, payload, VM_LEN_RESULT);
+}
+
+void VmUartLink::sendRfidCard(uint8_t seq, const char* uidHex, uint8_t uidLen) {
+    if (uidLen > VM_LEN_RFID_CARD_MAX) uidLen = VM_LEN_RFID_CARD_MAX;
+    sendFrame(VM_CMD_RFID_CARD, seq, (const uint8_t*)uidHex, uidLen);
 }
 
 // ------------------------------------------------------------
@@ -242,12 +215,9 @@ int16_t VmUartLink::expectedPayloadLen(uint8_t cmd) {
         case VM_CMD_DISPLAY:   return VM_LEN_DISPLAY;
         case VM_CMD_VEND:      return VM_LEN_VEND;
         case VM_CMD_RESULT:    return VM_LEN_RESULT;
-        case VM_CMD_STATUS:
-            // Longitud depende de si es solicitud (0) o respuesta (7);
-            // el llamador debe resolverlo según su rol/dirección.
-            return -1;
-        default:
-            return -1;
+        case VM_CMD_RFID_CARD: return -1; // Variable (1..20 bytes)
+        case VM_CMD_STATUS:    return -1; // Depende de dirección (0 o 7)
+        default:               return -1;
     }
 }
 

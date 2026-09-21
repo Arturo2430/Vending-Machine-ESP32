@@ -39,7 +39,7 @@
 
 // Puntero a función para enviar comandos al Mega (abstrae el controller).
 typedef uint32_t (*VendFn)(uint8_t channel);
-typedef void     (*DisplayFn)(const char* l1, const char* l2);
+typedef void     (*DisplayFn)(const char* l1, const char* l2, const char* l3, const char* l4);
 typedef void     (*SetModeFn)(uint8_t mode);
 
 // ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ public:
     /** Handshake UART completado: la FSM puede iniciar. */
     void handleHandshakeComplete();
 
-    /** UID de tarjeta RFID leída por el lector del ESP32. */
+    /** UID de tarjeta RFID leída (v2.1: recibida desde UART del Mega). */
     void handleRfidCard(const String& uid);
 
     /** Estado actual (para diagnóstico). */
@@ -175,7 +175,7 @@ private:
     void resetInactivityTimer();
     bool inactivityExpired() const;
     bool motorTimerExpired() const;
-    void display(const char* l1, const char* l2);
+    void display(const char* l1, const char* l2, const char* l3, const char* l4);
     void buildReposoCarousel();
     void buildFinCarousel();
     uint32_t numBufferValue() const;

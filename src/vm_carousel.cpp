@@ -27,10 +27,12 @@ void VmCarousel::clear() {
     _running = false;
 }
 
-bool VmCarousel::addSlide(const char* line1, const char* line2) {
+bool VmCarousel::addSlide(const char* line1, const char* line2, const char* line3, const char* line4) {
     if (_count >= CAROUSEL_MAX_SLIDES) return false;
     padLine(line1, _slides[_count].line1);
     padLine(line2, _slides[_count].line2);
+    padLine(line3, _slides[_count].line3);
+    padLine(line4, _slides[_count].line4);
     _count++;
     return true;
 }
@@ -63,7 +65,7 @@ void VmCarousel::update() {
 
 void VmCarousel::emitCurrent() {
     if (_callback && _count > 0) {
-        _callback(_slides[_current].line1, _slides[_current].line2);
+        _callback(_slides[_current].line1, _slides[_current].line2, _slides[_current].line3, _slides[_current].line4);
     }
 }
 

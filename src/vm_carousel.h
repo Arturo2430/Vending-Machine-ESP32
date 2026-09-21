@@ -1,19 +1,11 @@
 /**
  * @file vm_carousel.h
- * @brief Gestor no bloqueante de rotación de pantallas en el LCD 16×2.
+ * @brief Gestor no bloqueante de rotación de pantallas en el LCD 20×4 (v2.1).
  *
- * Permite cargar N subpantallas (cada una con dos líneas de texto) y
+ * Permite cargar N subpantallas (cada una con cuatro líneas de texto) y
  * rotarlas automáticamente cada VM_CAROUSEL_INTERVAL_MS, o avanzar
  * manualmente con advance().  Emite la actualización llamando a
  * VmEsp32Controller::updateDisplay() de la instancia registrada.
- *
- * Uso típico:
- *   carousel.clear();
- *   carousel.addSlide("  SAID VENDING  ", "  Selec 1-4 OK  ");
- *   carousel.addSlide("Slot 1 $18.00   ", "Stock: 8        ");
- *   carousel.start();
- *   // En loop():
- *   carousel.update();
  */
 
 #ifndef VM_CAROUSEL_H
@@ -23,19 +15,21 @@
 #include "vm_board_config.h"
 
 // Tamaño máximo de la línea LCD (excluye terminador nulo).
-static constexpr uint8_t LCD_LINE_LEN = 16;
+static constexpr uint8_t LCD_LINE_LEN = VM_LCD_COLS; // 20
 
 // Número máximo de subpantallas por carrusel.
 static constexpr uint8_t CAROUSEL_MAX_SLIDES = 6;
 
 // Firma del callback para actualizar el display (wrappea updateDisplay del controller).
-typedef void (*DisplayCallback)(const char* line1, const char* line2);
+typedef void (*DisplayCallback)(const char* line1, const char* line2, const char* line3, const char* line4);
 
 // ---------------------------------------------------------------------------
 
 struct Slide {
     char line1[LCD_LINE_LEN + 1];
     char line2[LCD_LINE_LEN + 1];
+    char line3[LCD_LINE_LEN + 1];
+    char line4[LCD_LINE_LEN + 1];
 };
 
 class VmCarousel {
@@ -48,10 +42,10 @@ public:
     /**
      * @brief Agrega una subpantalla.
      *
-     * Las cadenas se recortan o rellenan con espacios a exactamente 16 chars.
+     * Las cadenas se recortan o rellenan con espacios a exactamente 20 chars.
      * @return false si ya se alcanzó CAROUSEL_MAX_SLIDES.
      */
-    bool addSlide(const char* line1, const char* line2);
+    bool addSlide(const char* line1, const char* line2, const char* line3, const char* line4);
 
     /** Fuerza la emisión de la primera subpantalla e inicia el temporizador. */
     void start();
