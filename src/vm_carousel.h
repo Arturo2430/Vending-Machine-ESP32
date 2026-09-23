@@ -45,7 +45,7 @@ public:
      * Las cadenas se recortan o rellenan con espacios a exactamente 20 chars.
      * @return false si ya se alcanzó CAROUSEL_MAX_SLIDES.
      */
-    bool addSlide(const char* line1, const char* line2, const char* line3, const char* line4);
+    bool addSlide(const char* line1, const char* line2, const char* line3 = "                    ", const char* line4 = "                    ");
 
     /** Fuerza la emisión de la primera subpantalla e inicia el temporizador. */
     void start();

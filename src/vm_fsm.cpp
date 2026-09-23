@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file vm_fsm.cpp
  * @brief Implementación de la FSM de la Máquina Expendedora SAID.
  *
@@ -16,7 +16,7 @@
 // Constructor
 // ---------------------------------------------------------------------------
 
-static void noopDisplay(const char*, const char*) {}
+static void noopDisplay(const char*, const char*, const char*, const char*) {}
 
 VmFsm::VmFsm(VmDatabase& db, VendFn vendFn, DisplayFn displayFn, SetModeFn setModeFn)
     : _db(db),
@@ -720,10 +720,10 @@ void VmFsm::buildReposoCarousel() {
 
     for (uint8_t slot = 1; slot <= 4; slot++) {
         SlotInfo info;
-        if (_db.getSlotInfo(slot, info) && info.habilitado) {
-            snprintf(line1, sizeof(line1), "Ch%d: %s", slot, info.nombre.c_str());
+        if (_db.getSlot(slot, info) && info.enabled) {
+            snprintf(line1, sizeof(line1), "Ch%d: %s", slot, info.productName);
             char priceStr[21];
-            snprintf(priceStr, sizeof(priceStr), "$%d.%02d", info.precioCentavos / 100, info.precioCentavos % 100);
+            snprintf(priceStr, sizeof(priceStr), "$%d.%02d", info.priceCentavos / 100, info.priceCentavos % 100);
             if (info.stock == 0) {
                 snprintf(line2, sizeof(line2), "%-9s [AGOTADO]", priceStr);
             } else {

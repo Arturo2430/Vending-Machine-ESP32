@@ -94,18 +94,6 @@ uint32_t VmEsp32Controller::vend(uint8_t channel) {
     return txId;
 }
 
-void VmEsp32Controller::updateDisplay(const char* text1, const char* text2) {
-    if (_link == nullptr) {
-        return;
-    }
-    char line1[VM_DISPLAY_LINE_LEN];
-    char line2[VM_DISPLAY_LINE_LEN];
-    VmUartLink::padDisplayLine(text1, line1);
-    VmUartLink::padDisplayLine(text2, line2);
-    uint8_t seq = _link->nextSeq();
-    _link->sendDisplay(seq, line1, line2);
-}
-
 uint32_t VmEsp32Controller::generateTransactionId() {
     // NOTA: contador en RAM, se reinicia a VM_TX_ID_MIN en cada
     // arranque del ESP32.
@@ -258,4 +246,8 @@ void VmEsp32Controller::frameTrampoline(uint8_t cmd, uint8_t seq,
     if (s_instance != nullptr) {
         s_instance->handleIncomingFrame(cmd, seq, payload, len);
     }
+}
+
+void VmEsp32Controller::onRfidCard(RfidCardCallback callback) {
+    _onRfidCard = callback;
 }
